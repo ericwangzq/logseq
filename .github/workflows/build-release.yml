@@ -1,0 +1,237 @@
+# Simplified release workflow for personal forks.
+# Triggers on every push to master and creates/updates a rolling "latest" release.
+# No code signing secrets required.
+
+name: Build-Release
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+env:
+  CLOJURE_VERSION: '1.11.1.1413'
+  NODE_VERSION: '22'
+  JAVA_VERSION: '11'
+
+jobs:
+  # ── Step 1: Compile ClojureScript once, share across platform builds ──
+  compile-cljs:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - uses: DeLaGuardo/setup-clojure@13.5
+        with:
+          cli: ${{ env.CLOJURE_VERSION }}
+
+      - name: Cache Clojure deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: ${{ runner.os }}-clojure-${{ hashFiles('**/deps.edn') }}
+
+      - name: Cache yarn
+        uses: actions/cache@v4
+        with:
+          path: $(yarn cache dir)
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+
+      - name: Determine version
+        id: ver
+        run: |
+          BASE=$(node ./scripts/get-pkg-version.js)
+          DATE=$(date -u +%Y%m%d)
+          SHA=$(git rev-parse --short HEAD)
+          echo "version=${BASE}+${DATE}.${SHA}" >> $GITHUB_OUTPUT
+
+      - name: Compile CLJS
+        run: yarn install && gulp build && yarn cljs:release-electron && yarn webpack-app-build
+
+      - name: Stamp version into static/package.json and static/VERSION
+        run: |
+          sed -i 's/"version": "0.0.1"/"version": "${{ steps.ver.outputs.version }}"/g' ./static/package.json
+          echo "${{ steps.ver.outputs.version }}" > ./static/VERSION
+
+      - name: Upload static artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: static
+          path: static
+          retention-days: 1
+
+  # ── Step 2a: macOS arm64 (Apple Silicon) ──
+  build-macos-arm64:
+    needs: compile-cljs
+    runs-on: macos-14
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: static
+          path: static
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Build Electron app (arm64)
+        run: yarn install --ignore-platform && yarn rebuild:all && yarn electron:make-macos-arm64
+        working-directory: ./static
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p builds
+          cp static/VERSION builds/VERSION
+          mv static/out/make/Logseq.dmg \
+             builds/Logseq-darwin-arm64-${{ needs.compile-cljs.outputs.version }}.dmg
+          mv static/out/make/zip/darwin/arm64/*.zip \
+             builds/Logseq-darwin-arm64-${{ needs.compile-cljs.outputs.version }}.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: logseq-darwin-arm64
+          path: builds
+
+  # ── Step 2b: macOS x64 (Intel) ──
+  build-macos-x64:
+    needs: compile-cljs
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: static
+          path: static
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Build Electron app (x64)
+        run: yarn install && yarn rebuild:all && yarn electron:make
+        working-directory: ./static
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p builds
+          cp static/VERSION builds/VERSION
+          mv static/out/make/Logseq.dmg \
+             builds/Logseq-darwin-x64-${{ needs.compile-cljs.outputs.version }}.dmg
+          mv static/out/make/zip/darwin/x64/*.zip \
+             builds/Logseq-darwin-x64-${{ needs.compile-cljs.outputs.version }}.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: logseq-darwin-x64
+          path: builds
+
+  # ── Step 2c: Linux x64 (AppImage + zip) ──
+  build-linux-x64:
+    needs: compile-cljs
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: static
+          path: static
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build Electron app (linux x64)
+        run: yarn install && yarn electron:make
+        working-directory: ./static
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p builds
+          cp static/VERSION builds/VERSION
+          mv static/out/make/*-*.AppImage \
+             builds/Logseq-linux-x64-${{ needs.compile-cljs.outputs.version }}.AppImage
+          mv static/out/make/zip/linux/x64/*.zip \
+             builds/Logseq-linux-x64-${{ needs.compile-cljs.outputs.version }}.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: logseq-linux-x64
+          path: builds
+
+  # ── Step 3: Create / update the rolling "latest" GitHub Release ──
+  release:
+    needs: [compile-cljs, build-macos-arm64, build-macos-x64, build-linux-x64]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: logseq-darwin-arm64
+          path: ./
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: logseq-darwin-x64
+          path: ./
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: logseq-linux-x64
+          path: ./
+
+      - name: Generate SHA256 checksums
+        run: sha256sum *.dmg *.zip *.AppImage > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - name: Delete existing "latest" release + tag (if any)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+
+      - name: Publish rolling "latest" release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Latest build (${{ needs.compile-cljs.outputs.version }})"
+          body: |
+            Automatically built from `master` on every push.
+
+            **Version:** `${{ needs.compile-cljs.outputs.version }}`
+            **Commit:** ${{ github.sha }}
+
+            | Platform | File |
+            |----------|------|
+            | macOS (Apple Silicon) | `Logseq-darwin-arm64-*.dmg` |
+            | macOS (Intel) | `Logseq-darwin-x64-*.dmg` |
+            | Linux x64 | `Logseq-linux-x64-*.AppImage` |
+
+            > ⚠️ macOS builds are **unsigned**. On first launch: right-click → Open.
+          draft: false
+          prerelease: true
+          files: |
+            ./*.dmg
+            ./*.zip
+            ./*.AppImage
+            ./SHA256SUMS.txt
