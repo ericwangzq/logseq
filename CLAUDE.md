@@ -108,6 +108,15 @@ Logseq is a multi-platform knowledge management app (web, desktop via Electron, 
 - DB-sync protocol reference: `docs/agent-guide/db-sync/protocol.md`
 - Architecture boundary linting enforces that worker and frontend code stay separate — run `bb lint:worker-and-frontend-separate` to validate
 
+### CLAUDE.md Maintenance Protocol
+
+Keep this file up to date proactively — the user should not have to ask:
+- **After completing a feature**: document involved files, design decisions, and any non-obvious constraints
+- **After fixing a complex bug**: record root cause and fix approach to avoid re-investigation
+- **Skip for trivial changes** (typos, minor CSS tweaks)
+
+This file is the only persistent memory across sessions. If it is not updated, the next session starts blind.
+
 ---
 
 ## Custom Features (this fork)
