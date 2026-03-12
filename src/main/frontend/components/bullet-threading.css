@@ -1,0 +1,201 @@
+/* Bullet threading: visual connecting lines between parent and child blocks.
+   All rules are scoped under .is-bullet-threading so the feature can be
+   toggled by adding/removing that class from the main app container. */
+
+.is-bullet-threading {
+  --ls-block-bullet-active-color: var(
+    --ls-block-bullet-threading-active-color-overwrite,
+    #1f78b4
+  );
+  --ls-block-bullet-threading-width: var(
+    --ls-block-bullet-threading-width-overwrite,
+    2px
+  );
+}
+
+/* ── Dynamic blue guide line via JS ──
+   A focusin event listener (container.cljs) walks up the DOM from the focused
+   block and sets --thread-blue-height on each .block-children-container ancestor.
+   The ::before pseudo-element renders the blue portion of the guide line.
+   This approach keeps the element within the parent compositor layer,
+   avoiding the will-change:transform clipping issue on child .ls-block elements. */
+.is-bullet-threading .block-children-container[data-thread-active]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: var(--thread-blue-height, 0px);
+  width: var(--ls-block-bullet-threading-width);
+  background-color: var(--ls-block-bullet-active-color);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ── Bullet appearance ── */
+
+.is-bullet-threading .ls-block .bullet {
+  background-color: var(--ls-block-bullet-active-color);
+  box-shadow: 0 0 0 1px var(--ls-block-bullet-active-color);
+}
+
+.is-bullet-threading .ls-block:not(:focus-within) .bullet {
+  background-color: var(--ls-block-bullet-color);
+  transform: scale(1);
+  box-shadow: none;
+}
+
+/* Modern bullet rendering (Logseq >= current) */
+
+.is-bullet-threading .bullet-container {
+  position: relative;
+  z-index: 2;
+}
+
+.is-bullet-threading .bullet-container::before {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  top: 3px;
+  left: 3px;
+  border-radius: 999px;
+  background-color: var(--ls-block-bullet-color);
+  z-index: 3;
+}
+
+.is-bullet-threading .bullet-container::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: 999px;
+  background-color: var(--ls-primary-background-color);
+  z-index: 2;
+}
+
+.is-bullet-threading .bullet-container .bullet {
+  display: block;
+  position: relative;
+  z-index: 1;
+  width: 8px;
+  height: 8px;
+  margin: 3px;
+  border-radius: 999px;
+  font-size: 1rem;
+  border-width: 0 !important;
+  border-color: transparent !important;
+  background-color: transparent !important;
+  transform: scale(1) !important;
+  opacity: 1 !important;
+  box-shadow: none !important;
+}
+
+.is-bullet-threading .ls-block:not(:focus-within) .bullet-container .bullet {
+  border-width: 0 !important;
+  border-color: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.is-bullet-threading .ls-block:focus-within > .block-main-container .bullet-container::before,
+.is-bullet-threading .ls-block:has(.ls-block:focus-within) > .block-main-container .bullet-container::before {
+  background-color: var(--ls-block-bullet-active-color) !important;
+}
+
+/* ── Order list adjustments ── */
+
+.is-bullet-threading .bullet-container.as-order-list {
+  width: 22px !important;
+}
+
+.is-bullet-threading .ls-block.is-order-list[haschild] > div > .block-content-wrapper::before {
+  left: -15px;
+  top: 24px;
+}
+
+.is-bullet-threading .ls-block .ls-block.is-order-list > div > div.block-control-wrap::before {
+  right: 22px;
+  top: calc(-50% + 0.5rem);
+}
+
+/* ── Children left-border hover highlight ── */
+
+.is-bullet-threading .block-children-left-border:hover {
+  background-color: var(--ls-block-bullet-active-color);
+}
+
+/* ── block-children guide line ── */
+
+.is-bullet-threading .block-children {
+  border-left-color: var(--ls-guideline-color);
+  border-left-width: var(--ls-block-bullet-threading-width) !important;
+}
+
+/* ── block-control z-index ── */
+
+.is-bullet-threading .block-control {
+  z-index: 1;
+}
+
+/* ── Connecting arc from parent control-wrap to child block ── */
+
+.is-bullet-threading .ls-block .ls-block > div > div.block-control-wrap::before {
+  pointer-events: none;
+  content: "";
+  left: calc(var(--ls-block-bullet-threading-width) * -1);
+  right: 16px;
+  top: calc(-50% + var(--ls-block-bullet-threading-width) * 0.5 - 1px);
+  bottom: 50%;
+  position: absolute;
+  border-left: var(--ls-block-bullet-threading-width) solid transparent;
+  border-bottom: var(--ls-block-bullet-threading-width) solid transparent;
+  border-bottom-left-radius: 10px;
+  z-index: 1;
+}
+
+.is-bullet-threading .ls-block .ls-block:focus-within > div > div.block-control-wrap::before {
+  border-color: var(--ls-block-bullet-active-color);
+}
+
+/* ── Vertical line descending from parent bullet ── */
+
+.is-bullet-threading .ls-block[haschild] > div > .block-content-wrapper::before {
+  pointer-events: none;
+  content: "";
+  top: 12px;
+  bottom: 0;
+  left: -13px;
+  position: absolute;
+  border-left: var(--ls-block-bullet-threading-width) solid transparent;
+  z-index: 1;
+}
+
+.is-bullet-threading .ls-block[haschild]:focus-within > div > .block-content-wrapper::before {
+  border-color: var(--ls-block-bullet-active-color);
+}
+
+@media (max-width: 640px) {
+  .is-bullet-threading .ls-block[haschild] > div > .block-content-wrapper::before {
+    left: -11px;
+  }
+}
+
+/* ── Disable threading inside embeds ── */
+
+.is-bullet-threading :is(.embed-block > div, .embed-page) > div > div > div > div.ls-block > div > div.block-control-wrap::before {
+  border-color: transparent !important;
+}
+
+/* ── Disable threading in doc-mode ── */
+
+.is-bullet-threading .doc-mode .ls-block .ls-block > div > div.block-control-wrap::before,
+.is-bullet-threading .doc-mode .ls-block[haschild] > div > .block-content-wrapper::before {
+  display: none;
+}
+
+.is-bullet-threading .doc-mode .block-children-container[data-thread-active]::before {
+  display: none;
+}
+
+.is-bullet-threading .doc-mode .block-children {
+  border-left-width: 0 !important;
+}

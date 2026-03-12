@@ -346,6 +346,38 @@
                 (.closest (.-target e) "a"))
     (editor-handler/show-action-bar!)))
 
+(defn- clear-bullet-threading-highlights! []
+  (doseq [el (array-seq (js/document.querySelectorAll ".block-children-container[data-thread-active]"))]
+    (.removeAttribute el "data-thread-active")
+    (.removeProperty (.-style el) "--thread-blue-height")))
+
+(defn- update-bullet-threading! [e]
+  (when (state/bullet-threading?)
+    (clear-bullet-threading-highlights!)
+    (when-let [target (.-target e)]
+      (when-let [ls-block (.closest target ".ls-block")]
+        (loop [block ls-block]
+          (let [parent-node      (.-parentElement block)
+                parent-children  (when parent-node (.closest parent-node ".block-children"))
+                parent-container (when parent-children (.-parentElement parent-children))]
+            (when (and parent-container (d/has-class? parent-container "block-children-container"))
+              (let [container-rect  (.getBoundingClientRect parent-container)
+                    control-wrap    (.querySelector block ".block-control-wrap")
+                    control-rect    (when control-wrap (.getBoundingClientRect control-wrap))
+                    ;; Arc ::before starts at -50% of control-wrap height above its top.
+                    ;; End the blue line exactly there so the arc takes over seamlessly.
+                    arc-top         (when control-rect
+                                      (- (.-top control-rect) (/ (.-height control-rect) 2)))
+                    height          (if arc-top
+                                      (- arc-top (.-top container-rect))
+                                      (let [block-rect (.getBoundingClientRect block)]
+                                        (- (+ (.-top block-rect) (/ (.-height block-rect) 2))
+                                           (.-top container-rect))))]
+                (.setAttribute parent-container "data-thread-active" "true")
+                (.setProperty (.-style parent-container) "--thread-blue-height" (str (max 0 height) "px")))
+              (when-let [ancestor (.closest (.-parentElement parent-container) ".ls-block")]
+                (recur ancestor)))))))))
+
 (rum/defcs ^:large-vars/cleanup-todo root-container < rum/reactive
   (mixins/event-mixin
    (fn [state]
@@ -365,7 +397,14 @@
                       (state/set-ui-last-key-code! (.-key e))))
      (mixins/listen state js/window "keyup"
                     (fn [_e]
-                      (state/set-state! :editor/latest-shortcut nil)))))
+                      (state/set-state! :editor/latest-shortcut nil)))
+     (mixins/listen state js/document "focusin" update-bullet-threading!)
+     ;; Only clear when focus leaves the document entirely (relatedTarget is nil).
+     ;; When focus moves between elements, focusin handles clearing to avoid redundant work.
+     (mixins/listen state js/document "focusout"
+                    (fn [e]
+                      (when (nil? (.-relatedTarget e))
+                        (clear-bullet-threading-highlights!))))))
   [state route-match main-content']
   (let [current-repo (state/sub :git/current-repo)
         theme (state/sub :ui/theme)
@@ -377,6 +416,7 @@
         settings-open? (state/sub :ui/settings-open?)
         left-sidebar-open? (state/sub :ui/left-sidebar-open?)
         wide-mode? (state/sub :ui/wide-mode?)
+        bullet-threading? (state/sub :ui/bullet-threading?)
         ls-block-hl-colored? (state/sub :pdf/block-highlight-colored?)
         right-sidebar-blocks (state/sub-right-sidebar-blocks)
         route-name (get-in route-match [:data :name])
@@ -416,6 +456,7 @@
                [{:ls-left-sidebar-open left-sidebar-open?
                  :ls-right-sidebar-open sidebar-open?
                  :ls-wide-mode wide-mode?
+                 :is-bullet-threading bullet-threading?
                  :ls-window-controls window-controls?
                  :ls-fold-button-on-right fold-button-on-right?
                  :ls-hl-colored ls-block-hl-colored?}])

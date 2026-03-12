@@ -91,6 +91,7 @@
  :settings-page/export-theme "匯出主題"
  :settings-page/show-brackets "顯示括號"
  :settings-page/wide-mode "寬屏模式"
+ :settings-page/bullet-threading "項目連接線"
  :settings-page/editor-font "編輯器字體"
  :settings-page/accent-color "高亮色"
  :settings-page/accent-color-alert "選擇高亮色可能會影響您選擇的自訂主題。"

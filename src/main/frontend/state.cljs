@@ -115,6 +115,9 @@
       :ui/system-theme?                      ((fnil identity (or util/mac? util/win32? false)) (storage/get :ui/system-theme?))
       :ui/custom-theme                       (or (storage/get :ui/custom-theme) {:light {:mode "light"} :dark {:mode "dark"}})
       :ui/wide-mode?                         (storage/get :ui/wide-mode)
+      :ui/bullet-threading?                  (if (false? (storage/get :ui/bullet-threading?))
+                                               false
+                                               true)
       :ui/radix-color                        (storage/get :ui/radix-color)
       :ui/editor-font                        (storage/get :ui/editor-font)
 
@@ -1413,6 +1416,16 @@ Similar to re-frame subscriptions"
   (let [mode (document-mode?)]
     (set-state! :document/mode? (not mode))
     (storage/set :document/mode? (not mode))))
+
+(defn bullet-threading?
+  []
+  (get @state :ui/bullet-threading?))
+
+(defn toggle-bullet-threading!
+  []
+  (let [mode (bullet-threading?)]
+    (set-state! :ui/bullet-threading? (not mode))
+    (storage/set :ui/bullet-threading? (not mode))))
 
 (defn toggle-highlight-recent-blocks!
   []

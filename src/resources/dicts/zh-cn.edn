@@ -125,6 +125,7 @@
  :settings-page/preferred-outdenting "逻辑缩进"
  :settings-page/show-brackets "显示括号 [[]]"
  :settings-page/wide-mode "宽屏模式"
+ :settings-page/bullet-threading "子弹连接线"
  :settings-page/editor-font "编辑器字体"
  :settings-page/accent-color "高亮色"
  :settings-page/accent-color-alert "选择高亮色可能会影响您选择的自定义主题。"

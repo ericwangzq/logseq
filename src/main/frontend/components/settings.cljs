@@ -237,6 +237,17 @@
      [:div {:style {:text-align "right"}}
       (ui/render-keyboard-shortcut (shortcut-helper/gen-shortcut-seq :ui/toggle-wide-mode))])])
 
+(defn bullet-threading-row [t bullet-threading?]
+  [:div.it.sm:grid.sm:grid-cols-3.sm:gap-4.sm:items-center
+   [:label.block.text-sm.font-medium.leading-5.opacity-70
+    {:for "bullet_threading"}
+    (t :settings-page/bullet-threading)]
+   [:div
+    [:div.rounded-md.sm:max-w-xs
+     (ui/toggle bullet-threading?
+                state/toggle-bullet-threading!
+                true)]]])
+
 (defn editor-font-family-row [t {:keys [type global]}]
   [:div.it.sm:grid.sm:grid-cols-3.sm:gap-4
    [:label.block.text-sm.font-medium.leading-5.opacity-70
@@ -632,12 +643,14 @@
         enable-tooltip? (state/enable-tooltip?)
         enable-shortcut-tooltip? (state/sub :ui/shortcut-tooltip?)
         show-brackets? (state/show-brackets?)
-        wide-mode? (state/sub :ui/wide-mode?)]
+        wide-mode? (state/sub :ui/wide-mode?)
+        bullet-threading? (state/sub :ui/bullet-threading?)]
 
     [:div.panel-wrap.is-editor
      (date-format-row t preferred-date-format)
      (show-brackets-row t show-brackets?)
      (toggle-wide-mode-row t wide-mode?)
+     (bullet-threading-row t bullet-threading?)
 
      (when (util/electron?) (switch-spell-check-row t))
      (outdenting-row t logical-outdenting?)
