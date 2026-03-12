@@ -107,3 +107,55 @@ Logseq is a multi-platform knowledge management app (web, desktop via Electron, 
 - DB-sync feature guide: `docs/agent-guide/db-sync/db-sync-guide.md`
 - DB-sync protocol reference: `docs/agent-guide/db-sync/protocol.md`
 - Architecture boundary linting enforces that worker and frontend code stay separate — run `bb lint:worker-and-frontend-separate` to validate
+
+---
+
+## Custom Features (this fork)
+
+### Bullet Threading (native integration)
+
+Ports `logseq-plugin-bullet-threading` into core as a default-on feature with a settings toggle.
+
+**Files:**
+| File | Role |
+|------|------|
+| `src/main/frontend/components/bullet-threading.css` | All visual CSS, scoped under `.is-bullet-threading` |
+| `src/main/frontend/components/container.cljs` | Event listeners + root class binding |
+| `src/main/frontend/state.cljs` | `:ui/bullet-threading?` state + `bullet-threading?` / `toggle-bullet-threading!` fns |
+| `src/main/frontend/components/settings.cljs` | Toggle row in Editor settings panel |
+| `src/resources/dicts/en.edn` | `"Bullet threading"` |
+| `src/resources/dicts/zh-cn.edn` | `"子弹连接线"` |
+| `src/resources/dicts/zh-hant.edn` | `"項目連接線"` |
+
+**How it works:**
+
+1. `container.cljs` binds class `.is-bullet-threading` to `#app-container-wrapper` when the feature is enabled.
+2. On `focusin`, `update-bullet-threading!` walks up the DOM from the focused `.ls-block`, and for each ancestor `.block-children-container` sets:
+   - `data-thread-active` attribute
+   - `--thread-blue-height` CSS custom property = distance from container top to the arc start point of the focused block (`block-control-wrap.top − block-control-wrap.height / 2`)
+3. `bullet-threading.css` renders the blue segment via `.block-children-container[data-thread-active]::before { height: var(--thread-blue-height) }`. This element lives inside the **parent** block's compositor layer, avoiding the `will-change: transform` clipping issue that affects child `.ls-block` pseudo-elements.
+4. On `focusout` (only when `relatedTarget === null`, i.e. focus leaves the document), highlights are cleared.
+
+**Key CSS design decisions:**
+- CSS variables (`--ls-block-bullet-active-color`, `--ls-block-bullet-threading-width`) are scoped inside `.is-bullet-threading`, not `:root`
+- The arc connecting each child block to the guide line uses `block-control-wrap::before` (blue only when `:focus-within`)
+- The parent bullet's descending line uses `block-content-wrapper::before` (blue when `:focus-within`)
+- Doc-mode and embed-mode disable threading via explicit `display: none` overrides
+
+**Settings UI:** Settings → Editor → "Bullet threading" toggle (persisted to localStorage)
+
+---
+
+### Release Workflow
+
+`.github/workflows/build-release.yml` — manually triggered (`workflow_dispatch`).
+
+Builds: macOS arm64 (Apple Silicon), macOS x64 (Intel), Linux x64. No code-signing secrets required.
+
+**To trigger:** GitHub → Actions → Build-Release → Run workflow, or:
+```bash
+gh workflow run build-release.yml --repo ericwangzq/logseq
+```
+
+Output: a rolling `latest` GitHub Release with `.dmg`, `.AppImage`, and `.zip` files.
+Version format: `<base-version>+<YYYYMMDD>.<short-sha>`
